@@ -63,11 +63,13 @@ We decide to choose C++ with CUDA programming for this project, because of its c
 
 We plan to achieve the following by the given dates:
 
-Date	Goal Reached
-03/28	Research on the CPU-based Parameter Server implementation and GPU based Parameter Server implementation & Find suitable datasets
-04/04   Implement the logistic regression algorithm in CUDA on medium size dataset and model
-04/11   Scale the GPU-based implementation to a larger dataset and model size
-04/18   Implement the GPU memory management algorithm and data placement of parameter cache in GPU memory 
-04/25	Experiments and profiling our GPU-based parameter server and benchmark with other ML frameworks if possible
-04/29	Summarize our results and complete the report
-05/05	Prepare the presentation
+
+| Date      | Goal Reached |
+| ----------- | ----------- |
+| 03/28	| Research on the CPU-based Parameter Server implementation and GPU based Parameter Server implementation & Find suitable datasets |
+| 04/04 |  Implement the logistic regression algorithm in CUDA on medium size dataset and model |
+| 04/11 |  Scale the GPU-based implementation to a larger dataset and model size |
+| 04/18 |  Implement the GPU memory management algorithm and data placement of parameter cache in GPU memory |
+| 04/25	|  Experiments and profiling our GPU-based parameter server and benchmark with other ML frameworks if possible |
+| 04/29	|  Summarize our results and complete the report |
+| 05/05	|  Prepare the presentation |
