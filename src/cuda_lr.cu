@@ -174,7 +174,6 @@ int main(int argc, char **argv) {
     for (int e = 0; e < epoch; e++) {
         train_kernel<<<gridDim, blockDim>>>(device_weights, device_meta_data, device_feature_ids, device_feature_vals,
            epoch, learning_rate, meta_data.size());
-        cudaDeviceSynchronize();
     }
     // move weights back
     cudaMemcpy(weights, device_weights, total_features * sizeof(double), cudaMemcpyDeviceToHost);
