@@ -44,8 +44,20 @@ python3 src/python_scripts/preprocessing.py data/large_train_data.tsv data/dict.
 
 - C++ based logistic regression
 ```shell
-gcc lr.cc -o lr 
+gcc src/lr.cc -std=c++11 -o lr 
 
 python3 src/python_scripts/lr.py data/formatted_small_train_dense.tsv dense 500 0.00001
 error(train): 0.011429
+```
+
+
+- CUDA based logistic regression
+```shell
+
+nvcc -O3 -m64 --gpu-architecture compute_61 -ccbin /usr/bin/gcc -std=c++11 -o cuda_lr src/cuda_lr.cu
+
+nvcc -m64 --gpu-architecture compute_61 -ccbin /usr/bin/gcc -std=c++11 -c -o cuda_lr src/cuda_lr.cu -O3
+
+
+./cuda_lr data/formatted_small_train_sparse.tsv 14164 500 0.00001
 ```

@@ -6,7 +6,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#define BLOCK_SIZE 1024
+#define BLOCK_SIZE 256
 using namespace std;
 
 struct Node {
@@ -16,28 +16,23 @@ struct Node {
     int data_offset;
 };
 
-
 vector<Node> meta_data;
 vector<long long> feature_ids;
 vector<double> feature_vals;
 double* weights;
-
-vector<Node> device_meta_data;
-vector<long long> device_feature_ids;
-vector<double> device_feature_vals;
-double* device_weights;
 
 int total_features;
 long epoch;
 double learning_rate;
 double threshold;
 
-__device__ double sigmoid(double x) {
+
+double sigmoid(double x) {
     double e = exp(x);
     return e / (1 + e);
 }
 
-__device__ forward(double* weights, vector<long long>& feature_ids, vector<double>& feature_vals,
+double forward(double* weights, vector<long long>& feature_ids, vector<double>& feature_vals,
                int start, int size) {
     double u = 0;
     for (int i = start; i < start + size; i++) {
@@ -46,20 +41,36 @@ __device__ forward(double* weights, vector<long long>& feature_ids, vector<doubl
     return sigmoid(u);
 }
 
-__device__ void update_weights(double* weights, vector<long long>& feature_ids, vector<double>& feature_vals,
+__device__ double device_sigmoid(double x) {
+    double e = exp(x);
+    return e / (1 + e);
+}
+
+__device__ double device_forward(double* weights, long long* feature_ids, double* feature_vals,
+               int start, int size) {
+    double u = 0;
+    for (int i = start; i < start + size; i++) {
+        u += feature_vals[i] * weights[feature_ids[i]];
+    }
+    return device_sigmoid(u);
+}
+
+__device__ void update_weights(double* weights, long long* feature_ids, double* feature_vals,
                     double diff, double learning_rate, int start, int size) {
     long long f_idx;
     for (int i = start; i < start + size; i++) {
         f_idx = feature_ids[i];
-        atomicAdd(weights[f_idx], feature_vals[i] * diff * learning_rate);
+        atomicAdd(&weights[f_idx], feature_vals[i] * diff * learning_rate);
     }
 }
 
-__global__ void train_kernel(double* weights, vector<Node>& meta_data, vector<long long>& feature_ids, vector<double>& feature_vals,
-           long epoch, double learning_rate) {
+__global__ void train_kernel(double* weights, Node* meta_data, long long* feature_ids, double* feature_vals,
+           long epoch, double learning_rate, int meta_data_size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < meta_data.size()) {
-        y_hat = forward(weights, feature_ids, feature_vals,
+    if (i < meta_data_size) {
+        double y_hat;
+        double diff;
+        y_hat = device_forward(weights, feature_ids, feature_vals,
                         meta_data[i].data_offset, meta_data[i].num_feature);
         diff = meta_data[i].label - y_hat;
         update_weights(weights, feature_ids, feature_vals,
@@ -67,21 +78,18 @@ __global__ void train_kernel(double* weights, vector<Node>& meta_data, vector<lo
     }
 }
 
-__global__ double predict(double* weights, vector<Node>& meta_data, vector<long long>& feature_ids, vector<double>& feature_vals) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < meta_data.size()) {
-        double y_hat;
-        int pred_y;
-        int size = meta_data.size();
-        long long num_error = 0;
-        for (int i = 0; i < size; i++) {
-            y_hat = forward(weights, feature_ids, feature_vals,
-                            meta_data[i].data_offset, meta_data[i].num_feature);
-            pred_y = (y_hat >= 0.5)? 1 : 0;
-            if (pred_y != meta_data[i].label) num_error++;
-        }
-        return (double) num_error / size;
+double predict(double* weights, vector<Node>& meta_data, vector<long long>& feature_ids, vector<double>& feature_vals) {
+    double y_hat;
+    int pred_y;
+    int size = meta_data.size();
+    long long num_error = 0;
+    for (int i = 0; i < size; i++) {
+        y_hat = forward(weights, feature_ids, feature_vals,
+                        meta_data[i].data_offset, meta_data[i].num_feature);
+        pred_y = (y_hat >= 0.5)? 1 : 0;
+        if (pred_y != meta_data[i].label) num_error++;
     }
+    return (double) num_error / size;
 }
 
 
@@ -95,7 +103,7 @@ int main(int argc, char **argv) {
     weights = (double*) malloc(sizeof(double) * total_features);
 
     cout << "Input filename: "<< filename << "\n";
-    cout << "Numeber of features: "<< total_features << "\n";
+    cout << "Number of features: "<< total_features << "\n";
 
     ifstream infile;
     infile.open(filename);
@@ -132,10 +140,10 @@ int main(int argc, char **argv) {
             line = line.substr(second);
         }
         // cout << endl;
-        data_offset += num_feature;
         // printf("# %d: y=%d, num_feature%d, offset=%d\n", sample_idx, label, num_feature, data_offset);
 
         Node node = {sample_idx, label, num_feature, data_offset};
+        data_offset += num_feature;
 
         meta_data.push_back(node);
         sample_idx++;
@@ -143,8 +151,13 @@ int main(int argc, char **argv) {
     }
 
     // Compute number of blocks and threads per block
-    dim3 blockDim(BLOCK_SIZE, 1, 1));
-    dim3 gridDim((meta_data.size() + BLOCK_SIZE - 1) / BLOCK_SIZE, 1, 1);
+    dim3 blockDim(BLOCK_SIZE);
+    dim3 gridDim((meta_data.size() + BLOCK_SIZE - 1) / BLOCK_SIZE);
+
+    Node* device_meta_data;
+    long long* device_feature_ids;
+    double* device_feature_vals;
+    double* device_weights;
 
     // Allocate device memory buffers on the GPU using cudaMalloc
     cudaMalloc((void**)&device_meta_data, meta_data.size() * sizeof(Node));
@@ -153,17 +166,18 @@ int main(int argc, char **argv) {
     cudaMalloc((void**)&device_weights, total_features * sizeof(double));
 
     // Copy sample data into GPU memory
-    cudaMemcpy(device_meta_data, meta_data, meta_data.size() * sizeof(Node), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_feature_ids, feature_ids, feature_ids.size() * sizeof(long long), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_feature_vals, feature_vals, feature_vals.size() * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_meta_data, &meta_data[0], meta_data.size() * sizeof(Node), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_feature_ids, &feature_ids[0], feature_ids.size() * sizeof(long long), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_feature_vals, &feature_vals[0], feature_vals.size() * sizeof(double), cudaMemcpyHostToDevice);
 
     // run kernel
     for (int e = 0; e < epoch; e++) {
-        train_kernel<<<blockDim, gridDim>>>(device_weights, device_meta_data, device_feature_ids, device_feature_vals,
-           epoch, learning_rate);
+        train_kernel<<<gridDim, blockDim>>>(device_weights, device_meta_data, device_feature_ids, device_feature_vals,
+           epoch, learning_rate, meta_data.size());
+        cudaDeviceSynchronize();
     }
-
-    train(weights, meta_data, feature_ids, feature_vals, epoch, learning_rate);
+    // move weights back
+    cudaMemcpy(weights, device_weights, total_features * sizeof(double), cudaMemcpyDeviceToHost);
     double error = predict(weights, meta_data, feature_ids, feature_vals);
     printf("error(train): %f\n", error);
 
