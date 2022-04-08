@@ -3,6 +3,7 @@
 #include<math.h>
 #include<fstream>
 #include<string>
+#include<chrono>
 
 using namespace std;
 
@@ -78,6 +79,14 @@ double predict(double* weights, vector<Node>& meta_data, vector<long long>& feat
 }
 
 int main(int argc, char **argv) {
+
+    using namespace std::chrono;
+    typedef std::chrono::high_resolution_clock Clock;
+    typedef std::chrono::duration<double> dsec;
+
+    auto start = Clock::now();
+
+
     string filename = argv[1];
     total_features = stoi(argv[2]);
     epoch = stol(argv[3]);
@@ -124,19 +133,30 @@ int main(int argc, char **argv) {
             line = line.substr(second);
         }
         // cout << endl;
-        data_offset += num_feature;
         // printf("# %d: y=%d, num_feature%d, offset=%d\n", sample_idx, label, num_feature, data_offset);
 
         Node node = {sample_idx, label, num_feature, data_offset};
+        data_offset += num_feature;
 
         meta_data.push_back(node);
         sample_idx++;
         num_feature = 0;
     }
 
+    auto init_time = duration_cast<dsec>(Clock::now() - start).count();
+    printf("Initialization Time: %lf.\n", init_time);
 
+    auto before_train = Clock::now();
     train(weights, meta_data, feature_ids, feature_vals, epoch, learning_rate);
+    auto train_time = duration_cast<dsec>(Clock::now() - before_train).count();
+    printf("Training Time: %lf.\n", train_time);
+
+    auto before_predict = Clock::now();
     double error = predict(weights, meta_data, feature_ids, feature_vals);
+    auto predict_time = duration_cast<dsec>(Clock::now() - before_predict).count();
+    printf("Prediction Time: %lf.\n", predict_time);
+
+
     printf("error(train): %f\n", error);
 
 
