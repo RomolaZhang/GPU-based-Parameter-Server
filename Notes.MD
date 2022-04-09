@@ -115,13 +115,27 @@ Training Time: 3.162660.
 Prediction Time: 1.649220.
 error(train): 0.143733
 
+-bash-4.2$ ./cuda_lr /usr/tmp/kdd10 20216830 1 0.00001 4 1 1
+Input filename: /usr/tmp/kdd10
+Number of features: 20216830
+Training Time: 0.027226.
+Prediction Time: 0.399279.
+error(train): 0.146991
+
+-bash-4.2$ ./cuda_lr /usr/tmp/kdd10 20216830 1 0.00001 4 0 1
+Input filename: /usr/tmp/kdd10
+Number of features: 20216830
+Training Time: 0.799217.
+Prediction Time: 0.483909.
+error(train): 0.146991
+
 ```
 
 
 nvcc -O3 -m64 --gpu-architecture compute_61 -ccbin /usr/bin/gcc -std=c++11 -o cuda_lr src/cuda_lr.cu
 
 
-./cuda_lr data/formatted_large_train_sparse.tsv 14164 500 0.00001 2 1
+./cuda_lr data/formatted_large_train_sparse.tsv 14164 500 0.00001 4 1 1
 
 gdb ./cuda_lr
 break main

@@ -59,10 +59,11 @@ __device__ void device_update_weights(double* parameter_cache, size_t num_parame
 
     for (int i = 0; i < meta_data[sample_idx].num_feature; i++) {
         feature_id = feature_ids[data_offset + i];
+        // printf("device: feature_id = %ld, num_parameter_cached: %ld\n", feature_id, num_parameter_cached);
         if (feature_id < num_parameter_cached) {
             // // printf("device: feature_id = %ld < num_parameter_cached\n", feature_id);
             atomicAdd(&parameter_cache[feature_id], feature_vals[data_offset + i] * diff * learning_rate);
-            // // printf("\nfeature_id=%d, parameter_cache[feature_id]=%f, val=%f\n", feature_id, parameter_cache[feature_id], feature_vals[data_offset + i]);
+            // printf("\nfeature_id=%d, parameter_cache[feature_id]=%f, val=%f\n", feature_id, parameter_cache[feature_id], feature_vals[data_offset + i]);
         } else {
             // // printf("device: feature_id = %ld > num_parameter_cached\n", uncached_offset + uncached);
             weights_from_cpu[uncached_offset + uncached] = feature_vals[data_offset + i] * diff * learning_rate;
@@ -95,15 +96,12 @@ __device__ double device_forward(double* parameter_cache, size_t num_parameter_c
 __global__ void train_kernel(double* parameter_cache, size_t num_parameter_cached, double* weights_from_cpu, Node* meta_data, long long* feature_ids, double* feature_vals,
                 double learning_rate, int batch_size) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i == 0){
-        for (int j = 0; j < 10; j++){
-            // printf("feature_id = %ld\n", feature_vals[j]);
-        }
-    }
+    // if (i < 50){
+    //     printf("i = %d, meta data offset = %d\n", i, meta_data[i].data_offset);
+    // }
     if (i < batch_size) {
         double y_hat;
         double diff;
-        //// printf("i = %d, feature_id_end = %ld\n", i, feature_ids[meta_data[i].data_offset + meta_data[i].num_feature - 1]);
         y_hat = device_forward(parameter_cache, num_parameter_cached, weights_from_cpu, feature_ids, feature_vals,
                                meta_data, i);
         diff = meta_data[i].label - y_hat;
@@ -146,15 +144,15 @@ void CPU_update_weights(size_t start_index, size_t batch_size, size_t num_uncach
 }
 
 
-size_t GPU_send(size_t start_idx, size_t num_parameter_cached,size_t array_space, double* weights, size_t& num_uncached_weight,
+size_t GPU_send(size_t start_idx, size_t num_pinned_data, size_t num_parameter_cached,size_t array_space, double* weights, size_t& num_uncached_weight,
                 vector<Node>& meta_data, vector<long long>& feature_ids, vector<double>& feature_vals, double* feature_weights_buffer,
-                Node* next_meta_data, long long* next_feature_ids, double* next_feature_vals, double* next_feature_weights, 
-                size_t& batch_size){
+                Node** next_meta_data, long long** next_feature_ids, double** next_feature_vals, double* next_feature_weights, 
+                size_t& batch_size, Node* pinned_meta_data, long long* pinned_feature_ids, double* pinned_feature_vals){
     num_uncached_weight = 0;
     size_t consumed_space = 0, current_idx = start_idx;
     size_t weight_idx = 0, feature_ids_idx;
-    while (consumed_space < array_space && current_idx < meta_data.size()) {
-        if (consumed_space + meta_data[current_idx].num_feature * MAX_DATA_SIZE > array_space)
+    while (consumed_space < array_space && current_idx < meta_data.size() - 1) {
+        if (consumed_space + meta_data[current_idx].num_feature * MAX_DATA_SIZE > array_space || start_idx < num_pinned_data && current_idx >= num_pinned_data)
             break;
         // num_cached_parameter_size = 200, num_samples = 4
         // num_features     [4, 3, 1, 2]
@@ -176,15 +174,19 @@ size_t GPU_send(size_t start_idx, size_t num_parameter_cached,size_t array_space
     }
 
     if (start_idx < meta_data.size()) {
-        size_t copy_size = (meta_data[current_idx].data_offset - meta_data[start_idx].data_offset) * MAX_DATA_SIZE;
-        // printf("copy_size=%d\n", copy_size);
-        cudaMemcpy(next_meta_data, &meta_data[start_idx], (current_idx - start_idx) * sizeof(Node), cudaMemcpyHostToDevice);
-        cudaMemcpy(next_feature_ids, &feature_ids[meta_data[start_idx].data_offset], copy_size, cudaMemcpyHostToDevice);
-        cudaMemcpy(next_feature_vals, &feature_vals[meta_data[start_idx].data_offset], copy_size, cudaMemcpyHostToDevice);
-
+        if (start_idx >= num_pinned_data){
+            size_t copy_size = (meta_data[current_idx].data_offset - meta_data[start_idx].data_offset) * MAX_DATA_SIZE;
+            // printf("copy_size=%d\n", copy_size);
+            cudaMemcpy(*next_meta_data, &meta_data[start_idx], (current_idx - start_idx) * sizeof(Node), cudaMemcpyHostToDevice);
+            cudaMemcpy(*next_feature_ids, &feature_ids[meta_data[start_idx].data_offset], copy_size, cudaMemcpyHostToDevice);
+            cudaMemcpy(*next_feature_vals, &feature_vals[meta_data[start_idx].data_offset], copy_size, cudaMemcpyHostToDevice);
+        }else{
+            *next_meta_data = pinned_meta_data + start_idx;
+            *next_feature_ids = pinned_feature_ids + meta_data[start_idx].data_offset;
+            *next_feature_vals = pinned_feature_vals + meta_data[start_idx].data_offset;
+        }
         // copy feature_weights
         cudaMemcpy(next_feature_weights, feature_weights_buffer, num_uncached_weight * MAX_DATA_SIZE, cudaMemcpyHostToDevice);
-
         batch_size = current_idx - start_idx;
     }
     // printf("GPU_send: start_idx=%d, current_idx=%d\n", start_idx, current_idx);
@@ -205,15 +207,9 @@ int main(int argc, char **argv) {
     long epoch = stol(argv[3]);
     double learning_rate = stod(argv[4]);
 
-
     double GPU_memory_size = stod(argv[5]); // in GB
     double GPU_cache_size = stod(argv[6]); // in GB
-
-    // MAX_DATA_SIZE = 8
-    // weights is of double type, and assume its size is at most 8 bytes (depending on platform)
-    // so the max number of parameters is computed below
-    size_t max_num_parameter_cached = GPU_cache_size * 1024 * 1024 * 1024 / MAX_DATA_SIZE;
-    size_t num_parameter_cached = (total_features > max_num_parameter_cached)? max_num_parameter_cached: total_features;
+    double GPU_data_size = stod(argv[7]); // in GB
 
     vector<Node> meta_data;
     vector<long long> feature_ids;
@@ -235,6 +231,16 @@ int main(int argc, char **argv) {
     int data_offset = 0;
     int num_uncached = 0;
     int uncached_offset = 0;
+
+    size_t GPU_pinned_data_consumed = 0;
+    size_t num_pinned_data = 0;
+    size_t max_pinned_data_size = GPU_data_size * 1024 * 1024 * 1024;
+
+    // MAX_DATA_SIZE = 8
+    // weights is of double type, and assume its size is at most 8 bytes (depending on platform)
+    // so the max number of parameters is computed below
+    size_t max_num_parameter_cached = GPU_cache_size * 1024 * 1024 * 1024 / MAX_DATA_SIZE;
+    size_t num_parameter_cached = (total_features > max_num_parameter_cached)? max_num_parameter_cached: total_features;
 
     while (getline(infile, line)) {
         label = line[0] - '0';
@@ -261,10 +267,15 @@ int main(int argc, char **argv) {
         }
 
         Node node = {sample_idx, label, num_feature, data_offset, num_uncached, uncached_offset};
+        meta_data.push_back(node);
+
+        if (GPU_pinned_data_consumed + sizeof(Node) + 2 * num_feature * MAX_DATA_SIZE <= max_pinned_data_size){
+            num_pinned_data ++;
+            GPU_pinned_data_consumed += sizeof(Node) + 2 * num_feature * MAX_DATA_SIZE;
+        }
+
         data_offset += num_feature;
         uncached_offset += num_uncached;
-
-        meta_data.push_back(node);
         sample_idx++;
         num_feature = 0;
         num_uncached = 0;
@@ -272,6 +283,13 @@ int main(int argc, char **argv) {
     // Add end node
     Node node = {sample_idx, label, num_feature, data_offset, num_uncached, uncached_offset};
     meta_data.push_back(node);
+
+    size_t num_pinned_features = num_pinned_data == 0 ? 0 : meta_data[num_pinned_data-1].data_offset + meta_data[num_pinned_data-1].num_feature;
+    size_t num_unpinned_features = feature_ids.size() - num_pinned_features;
+
+    // Compute kernel memory space
+    size_t max_array_space = (GPU_memory_size * 1024 * 1024 * 1024 - num_parameter_cached * MAX_DATA_SIZE - GPU_pinned_data_consumed) / 8;
+    size_t array_space = max_array_space; // (num_unpinned_features * MAX_DATA_SIZE > max_array_space) ? max_array_space: num_unpinned_features * MAX_DATA_SIZE;
 
     auto init_time = duration_cast<dsec>(Clock::now() - start).count();
     // printf("Initialization Time: %lf.\n", init_time);
@@ -282,22 +300,25 @@ int main(int argc, char **argv) {
     dim3 gridDim((meta_data.size() + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
     // Define kernel data structures
-    Node *current_meta_data, *next_meta_data;
-    long long *current_feature_ids, *next_feature_ids;
-    double *current_feature_vals, *next_feature_vals;
+    Node *pinned_meta_data, *current_meta_data, *next_meta_data;
+    long long *pinned_feature_ids, *current_feature_ids, *next_feature_ids;
+    double *pinned_feature_vals, *current_feature_vals, *next_feature_vals;
     double *current_feature_weights, *next_feature_weights;
     double *GPU_parameter_cache, *CPU_uncached_parameter_gradient;
-
-    // Compute kernel memory space
-    size_t max_array_space = (GPU_memory_size * 1024 * 1024 * 1024 - num_parameter_cached * MAX_DATA_SIZE) / 8;
-    
-    size_t array_space = (feature_ids.size() * MAX_DATA_SIZE > max_array_space) ? max_array_space: feature_ids.size() * MAX_DATA_SIZE;
-     
     size_t current_batch_size, next_batch_size;
 
     double *feature_weights_buffer = (double *) malloc(array_space);
 
-    // Allocate device memory buffers on the GPU using cudaMalloc
+    // Allocate and copy pinned data on GPU
+    SAFE_CALL(cudaMalloc((void**)&pinned_meta_data, sizeof(Node) * num_pinned_data));
+    SAFE_CALL(cudaMalloc((void**)&pinned_feature_ids, MAX_DATA_SIZE * num_pinned_features));
+    SAFE_CALL(cudaMalloc((void**)&pinned_feature_vals, MAX_DATA_SIZE * num_pinned_features));
+
+    cudaMemcpy(pinned_meta_data, &meta_data[0], num_pinned_data * sizeof(Node), cudaMemcpyHostToDevice);
+    cudaMemcpy(pinned_feature_ids, &feature_ids[0], MAX_DATA_SIZE * num_pinned_features, cudaMemcpyHostToDevice);
+    cudaMemcpy(pinned_feature_vals, &feature_vals[0], MAX_DATA_SIZE * num_pinned_features, cudaMemcpyHostToDevice);
+
+    // Allocate access buffers on GPU
     SAFE_CALL(cudaMalloc((void**)&current_meta_data, array_space));
     SAFE_CALL(cudaMalloc((void**)&current_feature_ids, array_space));
     SAFE_CALL(cudaMalloc((void**)&current_feature_vals, array_space));
@@ -308,34 +329,32 @@ int main(int argc, char **argv) {
     SAFE_CALL(cudaMalloc((void**)&next_feature_vals, array_space));
     SAFE_CALL(cudaMalloc((void**)&next_feature_weights, array_space));
 
-    CPU_uncached_parameter_gradient = (double*) malloc(array_space);
-
+    // Allocate parameter cache on GPU and gradient buffer on CPU
     SAFE_CALL(cudaMalloc((void**)&GPU_parameter_cache, num_parameter_cached * sizeof(double)));
+    CPU_uncached_parameter_gradient = (double*) malloc(array_space);
 
     auto before_train = Clock::now();
 
     size_t current_idx, next_idx, current_num_uncached_weight, next_num_uncached_weight;
 
-
-    // run kernel
     for (int e = 0; e < epoch; e++) {
         current_idx = 0;
-        next_idx = GPU_send(current_idx, num_parameter_cached, array_space, weights, current_num_uncached_weight,
+        next_idx = GPU_send(current_idx, num_pinned_data, num_parameter_cached, array_space, weights, current_num_uncached_weight,
                             meta_data, feature_ids, feature_vals, feature_weights_buffer,
-                            current_meta_data, current_feature_ids, current_feature_vals, current_feature_weights, current_batch_size);
-        while (current_idx < meta_data.size()){
-            // printf("current_idx = %d\n", current_idx);
+                            &current_meta_data, &current_feature_ids, &current_feature_vals, current_feature_weights, current_batch_size,
+                            pinned_meta_data, pinned_feature_ids, pinned_feature_vals);
+        while (current_idx < meta_data.size() - 1){
             int weight_start = current_idx, batch_size = next_idx - current_idx;
             current_idx = next_idx;
-    
             // train model
             train_kernel<<<gridDim, blockDim>>>(GPU_parameter_cache, num_parameter_cached, 
                                                 current_feature_weights, current_meta_data, current_feature_ids, current_feature_vals,
                                                 learning_rate, current_batch_size);
             // Overlapping the execution of below function on the CPU with the kernel execution on the GPU
-            next_idx = GPU_send(current_idx, num_parameter_cached, array_space, weights, next_num_uncached_weight,
+            next_idx = GPU_send(current_idx, num_pinned_data, num_parameter_cached, array_space, weights, next_num_uncached_weight,
                                 meta_data, feature_ids, feature_vals, feature_weights_buffer,
-                                next_meta_data, next_feature_ids, next_feature_vals, next_feature_weights, next_batch_size);
+                                &next_meta_data, &next_feature_ids, &next_feature_vals, next_feature_weights, next_batch_size,
+                                pinned_meta_data, pinned_feature_ids, pinned_feature_vals);
             
 
             // move weights back
@@ -350,10 +369,7 @@ int main(int argc, char **argv) {
             current_feature_weights = next_feature_weights;
             current_batch_size = next_batch_size;
             current_num_uncached_weight = next_num_uncached_weight;
-            
         }
-
-
     }
 
 
@@ -362,16 +378,12 @@ int main(int argc, char **argv) {
 
     auto before_predict = Clock::now();
 
-
     // move weights back
     cudaMemcpy(weights, GPU_parameter_cache, num_parameter_cached * sizeof(double), cudaMemcpyDeviceToHost);
-
 
     double error = predict(weights, meta_data, feature_ids, feature_vals);
     auto predict_time = duration_cast<dsec>(Clock::now() - before_predict).count();
     printf("Prediction Time: %lf.\n", predict_time);
-
-
     printf("error(train): %f\n", error);
 
     cudaFree(current_meta_data);
