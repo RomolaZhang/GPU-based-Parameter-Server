@@ -68,7 +68,7 @@ gunzip kdd10.gz
 
 - Previous Records
 ```bash
--bash-4.2$ ./cuda_lr data/formatted_large_train_sparse.tsv 14164 500 0.00001
+-bash-4.2$ ./cuda_lr data/formatted_large_train_sparse.tsv 14164 500 0.00001 2 1
 Input filename: data/formatted_large_train_sparse.tsv
 Number of features: 14164
 Initialization Time: 0.112439.
@@ -86,6 +86,16 @@ Training Time: 0.000022.
 Prediction Time: 0.721991.
 error(train): 0.143733
 
+-bash-4.2$ ./cuda_lr /usr/tmp/618-data/kdd10 20216830 1 0.00001 2 1
+Input filename: /usr/tmp/618-data/kdd10
+Number of features: 20216830
+Training Time: 0.753248.
+Prediction Time: 0.518369.
+error(train): 0.144061
+
+
+
+
 
 -bash-4.2$ ./lr data/formatted_large_train_sparse.tsv 14164 500 0.00001
 Input filename: data/formatted_large_train_sparse.tsv
@@ -95,11 +105,28 @@ Training Time: 1.822311.
 Prediction Time: 0.001623.
 error(train): 0.041667
 
--bash-4.2$ ./lr /usr/tmp/618-data/kdd10 20216830 1 0.00001
+
+
+-bash-4.2$ ./lr /usr/tmp/618-data/kdd10 20216830 1 0.00001 
 Input filename: /usr/tmp/618-data/kdd10
 Numeber of features: 20216830
 Initialization Time: 97.564933.
 Training Time: 3.162660.
 Prediction Time: 1.649220.
 error(train): 0.143733
+
 ```
+
+
+nvcc -O3 -m64 --gpu-architecture compute_61 -ccbin /usr/bin/gcc -std=c++11 -o cuda_lr src/cuda_lr.cu
+
+
+./cuda_lr data/formatted_large_train_sparse.tsv 14164 500 0.00001 2 1
+
+gdb ./cuda_lr
+break main
+run data/formatted_small_train_sparse.tsv 14164 1 0.00001 2 1
+
+
+
+break cuda_lr.cu:302
