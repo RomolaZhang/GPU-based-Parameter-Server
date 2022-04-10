@@ -76,13 +76,6 @@ We plan to achieve the following by the given dates:
 
 ## Milestone Report
 
-In one to two paragraphs, summarize the work that you have completed so far. (This should be easy if you have been maintaining this information on your project page.)
-Describe how you are doing with respect to the goals and deliverables stated in your proposal. Do you still believe you will be able to produce all your deliverables? If not, why? What about the â€nice to havesâ€? In your milestone writeup we want an updated list of goals that you plan to hit for the poster session.
-What do you plan to show at the poster session? Will it be a demo? Will it be a graph?
-Do you have preliminary results at this time? If so, it would be great to included them in your milestone write-up.
-List the issues that concern you the most. Are there any remaining unknowns (things you simply donâ€™t know how to solve, or resource you donâ€™t know how to get) or is it just a matter of coding and doing the work? If you do not wish to put this information on a public web site you are welcome to email the staff directly.
-
-
 ### Current Progress
 
 We have implemented a GPU-based training system with an explicit memory management policy. When the allocated GPU memory is not large enough to hold all the training data and model parameters, the training system will actively move data between CPU and GPU through a heuristic data placement policy. The current implementation is also capable of optimizing the training efficiency by caching part of model parameters and training data in the GPU memory to reduce the amount of data movement. We also added support to configurable parameters for dedicated GPU memory space to the access buffer pool, the pinned dataset, and the pinned parameter cache.
