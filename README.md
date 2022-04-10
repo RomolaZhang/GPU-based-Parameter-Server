@@ -91,6 +91,8 @@ Specifically, we have hit the majority of our 75% target and achieved some of th
 
 Up to now, we have mainly focused on designing and implementing the memory management part of the project. As we move on, we plan to scale our single machine implementation to cluster environments and start realizing the message passing protocol. Our updated schedule is shown below:
 
+| Date      | Goal Reached |
+| ----------- | ----------- |
 | 04/15 - 04/17 | Research and set up a distributed cluster, configure network message-passing protocol |
 | 04/18 - 04/22 | Set up sharded parameter servers in the cluster and implement parameter communication APIs |
 | 04/22 - 04/25 | Experiments and profiling our GPU-based parameter server training system and benchmark with other ML frameworks if possible |
