@@ -1,5 +1,6 @@
 # A GPU-based Parameter Server with Explicit Memory Management
 
+## Project Proposal
 ### Summary:
 
 We plan on implementing a parameter server approach to logistic regression based on stochastic gradient descent (SGD). We intend to take the data-parallel approach to process the data samples on a distributed set of worker nodes, utilize SIMD operations on GPU to boost up the highly parallelable workloads, and manage CPU/GPU memory explicitly to enable large model training and improve performance.
@@ -63,7 +64,6 @@ We decide to choose C++ with CUDA programming for this project, because of its c
 
 We plan to achieve the following by the given dates:
 
-
 | Date      | Goal Reached |
 | ----------- | ----------- |
 | 03/28	| Research on the CPU-based Parameter Server implementation and GPU based Parameter Server implementation & Find suitable datasets |
@@ -73,3 +73,45 @@ We plan to achieve the following by the given dates:
 | 04/25	|  Experiments and profiling our GPU-based parameter server and benchmark with other ML frameworks if possible |
 | 04/29	|  Summarize our results and complete the report |
 | 05/05	|  Prepare the presentation |
+
+## Milestone Report
+
+In one to two paragraphs, summarize the work that you have completed so far. (This should be easy if you have been maintaining this information on your project page.)
+Describe how you are doing with respect to the goals and deliverables stated in your proposal. Do you still believe you will be able to produce all your deliverables? If not, why? What about the â€nice to havesâ€? In your milestone writeup we want an updated list of goals that you plan to hit for the poster session.
+What do you plan to show at the poster session? Will it be a demo? Will it be a graph?
+Do you have preliminary results at this time? If so, it would be great to included them in your milestone write-up.
+List the issues that concern you the most. Are there any remaining unknowns (things you simply donâ€™t know how to solve, or resource you donâ€™t know how to get) or is it just a matter of coding and doing the work? If you do not wish to put this information on a public web site you are welcome to email the staff directly.
+
+
+### Current Progress
+
+We have implemented a GPU-based training system with an explicit memory management policy. When the allocated GPU memory is not large enough to hold all the training data and model parameters, the training system will actively move data between CPU and GPU through a heuristic data placement policy. The current implementation is also capable of optimizing the training efficiency by caching part of model parameters and training data in the GPU memory to reduce the amount of data movement. We also added support to configurable parameters for dedicated GPU memory space to the access buffer pool, the pinned dataset, and the pinned parameter cache.
+
+Specifically, we have hit the majority of our 75% target and achieved some of the goals listed in the 100% target:
+- Implemented both CPU and GPU-based logistic regression
+- Implemented a synchronous version of the algorithm
+- Implemented the memory management policy on the parameter model in GPU memory according to the paper
+- Optimized the GPU memory management policy according to the nature of logistic regression and increased training efficiency
+- Implemented the mechanism to swap unused data from GPU to CPU and overlap data transfer with computation to keep GPU busy
+
+### Deliverable Updates
+
+Up to now, we have mainly focused on designing and implementing the memory management part of the project. As we move on, we plan to scale our single machine implementation to cluster environments and start realizing the message passing protocol. Our updated schedule is shown below:
+
+| 04/15 - 04/17 | Research and set up a distributed cluster, configure network message-passing protocol |
+| 04/18 - 04/22 | Set up sharded parameter servers in the cluster and implement parameter communication APIs |
+| 04/22 - 04/25 | Experiments and profiling our GPU-based parameter server training system and benchmark with other ML frameworks if possible |
+| 04/25 - 04/28	|  Graphs on experiment results and start drafting the report |
+| 04/28 - 04/29	|  Summarize our results and complete the report |
+| 04/29 - 05/05 |  Prepare the presentation |
+
+### Poster Session Plan
+
+For the poster session demo, we plan to include speedup and accuracy graphs on different model sizes and different steps of our implementation. We will also present our memory management policy and system architecture design.
+
+### Issues and Concerns
+
+One major concern of ours is about setting up the cluster environment. Firstly, we are unsure about the network topology and the communication protocol setup. Also, we don't know whether PSC can provide sufficient machine resources for the cluster. We intend to look into cluster-related issues very soon.
+
+Because we are working on training tasks with data storage and computation intensity exceeding the capacity of a single machine, we might encounter a lot of memory issues. The amount of time to load such a large dataset is another concern to us and we will also suffer from the long training process. 
+
