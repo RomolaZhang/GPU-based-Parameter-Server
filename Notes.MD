@@ -149,10 +149,8 @@ break cuda_lr.cu:302
 
 - MPI
 
-nvcc -O3 -m64 --gpu-architecture compute_61 -ccbin /usr/bin/gcc -std=c++11 -I/usr/local/depot/openmpi-4.0.2/include -L/usr/local/depot/openmpi-4.0.2/lib -lmpi -o cuda_lr src/mpi_cuda_lr.cu
+nvcc -O3 -m64 --gpu-architecture compute_61 -ccbin /usr/bin/gcc -std=c++11 -I/usr/local/depot/openmpi-4.0.2/include -L/usr/local/depot/openmpi-4.0.2/lib -lmpi -o mpi_cuda_lr src/mpi_cuda_lr.cu
 
-mpirun -np 3 ./mpi_cuda_lr data/formatted_small_train_sparse.tsv 14164 1 0.00001 2 1
-
-
+mpirun -np 3 ./mpi_cuda_lr data/formatted_large_train_sparse.tsv 14164 500 0.00001 2 0.5 0.5
 
 export LD_LIBRARY_PATH=/usr/local/depot/openmpi-4.0.2/lib

@@ -413,6 +413,9 @@ int main(int argc, char **argv) {
         MPI_Bcast(weights, total_features, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         memcpy(weights_copy, weights, sizeof(double) * total_features);
 
+        // move GPU cached parameter weights from CPU to GPU
+        cudaMemcpy(GPU_parameter_cache, weights, num_parameter_cached * sizeof(double), cudaMemcpyHostToDevice);
+
         current_idx = 0;
         next_idx = GPU_send(current_idx, num_pinned_data, num_parameter_cached, array_space, weights, current_num_uncached_weight,
                             meta_data, feature_ids, feature_vals, feature_weights_buffer,
