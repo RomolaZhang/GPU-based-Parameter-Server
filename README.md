@@ -1,8 +1,9 @@
 # A GPU-based Parameter Server with Explicit Memory Management
 
 ## Project Report
-[Report PDF](https://duckduckgo.com)
-[Report Tex Folder](https://duckduckgo.com)
+[Report PDF](https://github.com/RomolaZhang/GPU-based-Parameter-Server/blob/937d16114aadb7d386cd3eaeba69f2cb74d4b97e/report/Final_Report.pdf)
+
+[Report Tex Folder](https://github.com/RomolaZhang/GPU-based-Parameter-Server/tree/main/report/Final_Report_Tex)
 
 ## Project Video
 [Project Presentation](https://youtu.be/UUHU-RHWU3k)
