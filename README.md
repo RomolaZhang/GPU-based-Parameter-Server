@@ -1,5 +1,12 @@
 # A GPU-based Parameter Server with Explicit Memory Management
 
+## Project Report
+[Report PDF](https://duckduckgo.com)
+[Report Tex Folder](https://duckduckgo.com)
+
+## Project Video
+[Project Presentation](https://youtu.be/UUHU-RHWU3k)
+
 ## Project Proposal
 ### Summary:
 
@@ -109,4 +116,3 @@ For the poster session demo, we plan to include speedup and accuracy graphs on d
 One major concern of ours is about setting up the cluster environment. Firstly, we are unsure about the network topology and the communication protocol setup. Also, we don't know whether PSC can provide sufficient machine resources for the cluster. We intend to look into cluster-related issues very soon.
 
 Because we are working on training tasks with data storage and computation intensity exceeding the capacity of a single machine, we might encounter a lot of memory issues. The amount of time to load such a large dataset is another concern to us and we will also suffer from the long training process. 
-
